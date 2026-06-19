@@ -1,6 +1,6 @@
 import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { InsertUser, users } from "../drizzle/schema";
+import { InsertUser, users, paymentConfig, InsertPaymentConfig, transactions, InsertTransaction, qrCodes, InsertQrCode, notifications, InsertNotification } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
 let _db: ReturnType<typeof drizzle> | null = null;
@@ -89,4 +89,66 @@ export async function getUserByOpenId(openId: string) {
   return result.length > 0 ? result[0] : undefined;
 }
 
-// TODO: add feature queries here as your schema grows.
+// Payment Gateway Queries
+export async function getPaymentConfig() {
+  const db = await getDb();
+  if (!db) return null;
+  const result = await db.select().from(paymentConfig).limit(1);
+  return result.length > 0 ? result[0] : null;
+}
+
+export async function updatePaymentConfig(data: Partial<InsertPaymentConfig>) {
+  const db = await getDb();
+  if (!db) return null;
+  const result = await db.update(paymentConfig).set(data).execute();
+  return result;
+}
+
+export async function createTransaction(data: InsertTransaction) {
+  const db = await getDb();
+  if (!db) return null;
+  const result = await db.insert(transactions).values(data).execute();
+  return result;
+}
+
+export async function getTransaction(referenceId: string) {
+  const db = await getDb();
+  if (!db) return null;
+  const result = await db.select().from(transactions).where(eq(transactions.referenceId, referenceId)).limit(1);
+  return result.length > 0 ? result[0] : null;
+}
+
+export async function getAllTransactions(limit = 50, offset = 0) {
+  const db = await getDb();
+  if (!db) return [];
+  const result = await db.select().from(transactions).limit(limit).offset(offset).execute();
+  return result;
+}
+
+export async function updateTransactionStatus(referenceId: string, status: string) {
+  const db = await getDb();
+  if (!db) return null;
+  const result = await db.update(transactions).set({ status: status as any }).where(eq(transactions.referenceId, referenceId)).execute();
+  return result;
+}
+
+export async function createQrCode(data: InsertQrCode) {
+  const db = await getDb();
+  if (!db) return null;
+  const result = await db.insert(qrCodes).values(data).execute();
+  return result;
+}
+
+export async function getActiveQrCode() {
+  const db = await getDb();
+  if (!db) return null;
+  const result = await db.select().from(qrCodes).where(eq((qrCodes as any).isActive, 'yes')).limit(1);
+  return result.length > 0 ? result[0] : null;
+}
+
+export async function createNotification(data: InsertNotification) {
+  const db = await getDb();
+  if (!db) return null;
+  const result = await db.insert(notifications).values(data).execute();
+  return result;
+}

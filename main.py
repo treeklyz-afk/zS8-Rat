@@ -1,49 +1,59 @@
-from fastapi import FastAPI, HTTPException
-from fastapi.middleware.cors import CORSMiddleware
+from fastapi import FastAPI, Request
+from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
+import uvicorn
 from pydantic import BaseModel
 import os
-from dotenv import load_dotenv
+from datetime import datetime
+import uuid
 
-load_dotenv()
+app = FastAPI(title="zS8 Mock UPI Gateway", version="1.0")
 
-app = FastAPI(title="zS8-Rat API", version="1.0.0", description="Better API for zS8-Rat")
+# Mount static files
+app.mount("/static", StaticFiles(directory="static"), name="static")
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+templates = Jinja2Templates(directory="templates")
 
-class Item(BaseModel):
-    name: str
-    description: str = None
-    price: float = 0.0
+class PaymentRequest(BaseModel):
+    amount: float
+    upi_id: str
+    note: str = ""
 
-@app.get("/")
-def read_root():
-    return {
-        "message": "✅ zS8-Rat FastAPI Backend is running on Vercel!",
-        "status": "healthy",
-        "version": "1.0"
-    }
+class PaymentResponse(BaseModel):
+    transaction_id: str
+    qr_code: str
+    status: str
+    message: str
+
+@app.get("/", response_class=HTMLResponse)
+async def home_dashboard(request: Request):
+    return templates.TemplateResponse("index.html", {"request": request})
 
 @app.get("/health")
-def health_check():
-    return {"status": "ok", "db": "connected (mock)"}
+async def health():
+    return {"status": "healthy", "time": datetime.now().isoformat()}
 
-@app.post("/items/")
-def create_item(item: Item):
-    if not item.name:
-        raise HTTPException(status_code=400, detail="Name is required")
-    return {"item": item.dict(), "message": "Item created successfully"}
+@app.post("/api/payment/initiate", response_model=PaymentResponse)
+async def initiate_payment(payment: PaymentRequest):
+    tx_id = str(uuid.uuid4())
+    qr_data = f"upi://pay?pa={payment.upi_id}&am={payment.amount}&pn=zS8Mock&tr={tx_id}"
+    
+    return PaymentResponse(
+        transaction_id=tx_id,
+        qr_code=qr_data,
+        status="pending",
+        message="Payment initiated. Scan QR to pay."
+    )
 
-# Example endpoints - extend for your use case
-@app.get("/status")
-def get_status():
-    return {"rats": "online", "active": 42, "uptime": "100%"}
+@app.get("/api/payment/status/{tx_id}")
+async def payment_status(tx_id: str):
+    return {
+        "transaction_id": tx_id,
+        "status": "success",
+        "amount": 499.0,
+        "message": "Payment successful"
+    }
 
 if __name__ == "__main__":
-    import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
